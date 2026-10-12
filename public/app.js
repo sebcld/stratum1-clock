@@ -182,8 +182,9 @@ function renderOffset() {
     abs < 1 ? 'Tu reloj está prácticamente sincronizado'
       : `Tu reloj va ${fmtAbs(abs)} ${off > 0 ? 'atrasado' : 'adelantado'}`);
 
-  const serverDelay = state.status?.current?.delay ?? 0;
-  setText('precision', `±${(state.rtt / 2 + serverDelay / 2).toFixed(1)} ms`);
+  // Browser leg (RTT / 2) plus the server leg's root distance.
+  const serverError = state.status?.distance ?? (state.status?.current?.delay ?? 0) / 2;
+  setText('precision', `±${(state.rtt / 2 + serverError).toFixed(1)} ms`);
   setText('mRtt', fmtMs(state.rtt));
 }
 
@@ -212,28 +213,43 @@ function applyStatus(s) {
   setText('mJitter', c?.jitter == null ? (c ? 'calculando…' : '—') : fmtMs(c.jitter));
   setText('mStratum', c?.stratum != null ? String(c.stratum) : '—');
   setText('mRefid', c?.refid ?? '—');
+  setText('mDistance', s.distance == null ? '—' : `±${fmtMs(s.distance)}`);
+  setText('mAgree', s.agreement ? `${s.agreement.count} / ${s.agreement.total}` : '—');
+  setText('combineLimit', String(s.combineLimit ?? 3));
 
   renderServers(s);
   renderTimes();
   renderOffset();
 }
 
+const SELECTION_STATE = {
+  selected: ['', 'seleccionado'],
+  combined: ['combined', 'combinado'],
+  backup: ['backup', 'respaldo'],
+  falseticker: ['err', 'descartado'],
+};
+
 function renderServers(s) {
   const rows = s.servers.map((srv) => {
-    const current = s.current && srv.host === s.current.host;
+    const current = srv.selection === 'selected';
     let stateCell;
     if (srv.error) stateCell = `<span class="state err">${escapeHtml(srv.error)}</span>`;
     else if (srv.stratum == null) stateCell = '<span class="muted">pendiente</span>';
-    else if (srv.stratum !== 1) stateCell = `<span class="state warn">stratum ${srv.stratum}</span>`;
-    else stateCell = `<span class="state">${current ? 'actual' : 'OK'}</span>`;
+    else if (srv.selection) {
+      const [cls, label] = SELECTION_STATE[srv.selection];
+      stateCell = `<span class="state ${cls}">${label}</span>`;
+    } else if (srv.stratum !== 1) stateCell = `<span class="state warn">stratum ${srv.stratum} · no usado</span>`;
+    else stateCell = '<span class="muted">no usado</span>';
 
-    return `<tr class="${current ? 'current' : ''}">
+    return `<tr class="${current ? 'current' : ''}${srv.selection === 'falseticker' ? ' falseticker' : ''}">
       <td class="host">${escapeHtml(srv.host)}<small>${escapeHtml(srv.ip ?? '')}</small></td>
       <td class="mono">${srv.stratum ?? '—'}</td>
       <td class="mono">${escapeHtml(srv.refid ?? '—')}</td>
       <td class="num">${fmtSigned(srv.offset, 3)}</td>
       <td class="num">${fmtMs(srv.delay)}</td>
       <td class="num">${fmtMs(srv.jitter)}</td>
+      <td class="num">${srv.distance == null ? '—' : `±${fmtMs(srv.distance, 1)}`}</td>
+      <td class="num">${srv.weight ? `${(srv.weight * 100).toFixed(1)} %` : '—'}</td>
       <td>${stateCell}</td>
     </tr>`;
   });

@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { createClock, queryServer } = require('./ntp');
 const systemClock = require('./system-clock');
+const { selectAndCombine, COMBINE_LIMIT } = require('./selection');
 
 // Optional local configuration; .env is git-ignored so secrets never reach the repository.
 try { process.loadEnvFile(path.join(__dirname, '.env')); } catch { /* no .env file */ }
@@ -54,21 +55,18 @@ let lastSyncStart = 0;
 let nextSync = null;
 let lastError = null;
 let currentHost = null;
+let distanceMs = null;       // root distance of the selected source (max error of the server leg)
+let agreement = null;        // Marzullo result: how many sources agree and on which interval
 let inFlight = null;
 let autoTimer = null;
 
 const servers = new Map(
   NTP_SERVERS.map((host) => [host, { host, ip: null, stratum: null, refid: null, offset: null,
-    delay: null, jitter: null, precision: null, error: null, lastOk: null, history: [] }]),
+    delay: null, jitter: null, precision: null, rootDelay: null, rootDispersion: null,
+    distance: null, selection: null, weight: 0, error: null, lastOk: null, history: [] }]),
 );
 
 const ntpNow = () => clock() + offsetMs;
-
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
 
 /** RMS of the differences between successive offsets (RFC 5905 peer jitter). */
 function jitterOf(history) {
@@ -89,6 +87,9 @@ function getStatus() {
     synced,
     syncing: Boolean(inFlight),
     offset: synced ? offsetMs : null,
+    distance: synced ? distanceMs : null,
+    agreement,
+    combineLimit: COMBINE_LIMIT,
     current,
     lastSync,
     nextSync,
@@ -113,12 +114,14 @@ async function runSync() {
       if (entry.history.length > HISTORY_SIZE) entry.history.shift();
       Object.assign(entry, {
         ip: s.ip, stratum: s.stratum, refid: s.refid, offset: s.offset, delay: s.delay,
-        precision: s.precision, jitter: jitterOf(entry.history), error: null, lastOk: Date.now(),
+        precision: s.precision, rootDelay: s.rootDelay, rootDispersion: s.rootDispersion,
+        jitter: jitterOf(entry.history), error: null, lastOk: Date.now(),
       });
       fresh.push(entry);
     } else {
       entry.error = r.reason?.code || r.reason?.message || 'error';
     }
+    Object.assign(entry, { distance: null, selection: null, weight: 0 });
   });
 
   // Prefer genuine Stratum 1 replies; fall back to anything that answered.
@@ -131,20 +134,36 @@ async function runSync() {
     return;
   }
 
-  const best = candidates.reduce((a, b) => (b.delay < a.delay ? b : a));
+  const result = selectAndCombine(candidates);
+  for (const [host, info] of result.sources) {
+    Object.assign(servers.get(host), { distance: info.distance, selection: info.status, weight: info.weight });
+  }
+
+  if (!result.ok) {
+    // Keep the previous clock and offset: nothing trustworthy came out of this round.
+    agreement = null;
+    lastError = `${result.error}; se mantiene el offset anterior`;
+    console.warn(`[ntp] ${lastError}`);
+    return;
+  }
+
   // Swap clock and offset together so /api/time never mixes anchors.
   clock = roundClock;
-  offsetMs = median(candidates.map((s) => s.offset));
-  currentHost = best.host;
+  offsetMs = result.offset;
+  distanceMs = result.distance;
+  agreement = result.agreement;
+  currentHost = result.best.host;
   synced = true;
   lastSync = Date.now();
   lastError = candidates[0].stratum === 1 ? null : 'Sin respuesta Stratum 1; usando estratos superiores';
 
-  console.log(`[ntp] ${new Date(lastSync).toISOString()} offset=${offsetMs.toFixed(3)} ms ` +
-    `actual=${best.host} delay=${best.delay.toFixed(3)} ms (${candidates.length}/${NTP_SERVERS.length} válidos)`);
+  const used = [...result.sources.values()].filter((i) => i.weight > 0).length;
+  console.log(`[ntp] ${new Date(lastSync).toISOString()} offset=${offsetMs.toFixed(3)} ms ±${distanceMs.toFixed(3)} ` +
+    `seleccionado=${currentHost} combinados=${used} acuerdo=${agreement.count}/${agreement.total}`);
   for (const s of servers.values()) {
     const info = s.error ? `ERROR ${s.error}` :
-      `stratum=${s.stratum} refid=${s.refid} offset=${s.offset.toFixed(3)} delay=${s.delay.toFixed(3)}`;
+      `stratum=${s.stratum} refid=${s.refid} offset=${s.offset.toFixed(3)} delay=${s.delay.toFixed(3)} ` +
+      `±${s.distance?.toFixed(3) ?? '—'} ${s.selection ?? 'no usado'}${s.weight ? ` ${(s.weight * 100).toFixed(1)}%` : ''}`;
     console.log(`       ${s.host.padEnd(22)} ${info}`);
   }
 }

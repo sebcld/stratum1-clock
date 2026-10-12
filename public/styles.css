@@ -373,6 +373,12 @@ tr.current td.host { color: var(--accent); }
 .state.err::before { background: var(--bad); }
 .state.warn { color: var(--warn); }
 .state.warn::before { background: var(--warn); }
+.state.combined { color: var(--accent); }
+.state.combined::before { background: var(--accent); }
+.state.backup { color: var(--muted); }
+.state.backup::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+tr.falseticker td { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(248, 113, 113, 0.5); }
+tr.falseticker td:last-child { text-decoration: none; }
 
 /* ---------- Device sync ---------- */
 

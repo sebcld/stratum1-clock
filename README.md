@@ -10,7 +10,7 @@ cd stratum1-clock
 npm start          # o: node server.js
 ```
 
-Abre <http://localhost:3000>. No requiere dependencias (solo Node.js ≥ 20.12).
+Abrir <http://localhost:3000>. No requiere dependencias (solo Node.js ≥ 20.12).
 
 > El servidor necesita poder enviar tráfico **UDP al puerto 123**. Si el firewall lo bloquea, la interfaz mostrará "Ningún servidor NTP respondió".
 
@@ -38,11 +38,17 @@ La sincronización se hace en dos tramos, ambos con el algoritmo de NTP:
    - `offset = ((T2 − T1) + (T3 − T4)) / 2`
    - `delay = (T4 − T1) − (T3 − T2)`
    - `jitter` = RMS de las diferencias entre offsets sucesivos (últimas 8 muestras).
+   - `margen` (distancia raíz, RFC 5905) = `(delay + root delay) / 2 + root dispersion + precisión + jitter`: el error máximo de ese offset.
 
-   El servidor "actual" es el Stratum 1 con menor delay; el offset del sistema es la mediana de los Stratum 1 válidos. Resincroniza cada 64 s.
+   Resincroniza cada 64 s y combina los servidores Stratum 1 al estilo de **chrony** (`selection.js`):
+   1. Cada servidor define el intervalo `offset ± margen`.
+   2. **Algoritmo de Marzullo:** se busca el intervalo en el que coincide la mayoría; los servidores que no lo tocan se marcan como *descartados* (falsetickers). Si no hay mayoría, se mantiene el offset anterior.
+   3. El de menor margen queda **seleccionado**; los que tienen un margen de hasta 3× el suyo (`combinelimit 3`, como en chrony) se **combinan** con un promedio ponderado por `1/margen`. El resto queda como **respaldo**.
+
+   Así, desde Chile, `ntp.shoa.cl` (≈ 6 ms de delay) domina el resultado, y los servidores lejanos sirven de respaldo y de control de calidad.
 2. **Navegador ↔ servidor (HTTP)** — el navegador repite el cálculo contra `/api/time` (8 muestras, se usa la de menor RTT) y anima el reloj con `performance.now()`.
 
-La precisión final estimada es `±(RTT web / 2 + delay NTP / 2)`.
+La precisión final estimada es `±(RTT web / 2 + margen del servidor seleccionado)`.
 
 Para respetar las normas de uso de NIST (no más de una consulta cada 4 s), cada ronda envía un solo paquete por servidor y la sincronización manual tiene un intervalo mínimo de 8 s; si se pulsa antes, solo se re-mide el tramo navegador ↔ servidor.
 

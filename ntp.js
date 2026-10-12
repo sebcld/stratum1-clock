@@ -30,6 +30,11 @@ function readTimestamp(buf, offset) {
   return (seconds - NTP_EPOCH_OFFSET) * 1000 + (fraction * 1000) / TWO_POW_32;
 }
 
+/** Reads a 32-bit NTP short format value (16.16 fixed-point seconds) as milliseconds. */
+function readShort(buf, offset) {
+  return (buf.readUInt32BE(offset) / 65536) * 1000;
+}
+
 function parseRefId(buf, stratum) {
   const raw = buf.subarray(12, 16);
   if (stratum <= 1) return raw.toString('ascii').replace(/\0+$/, '').trim() || '—';
@@ -86,6 +91,8 @@ function querySample(ip, clock, timeoutMs) {
         stratum,
         refid: parseRefId(msg, stratum),
         precision: Math.pow(2, msg.readInt8(3)) * 1000, // ms
+        rootDelay: readShort(msg, 4),      // server's round trip to its reference (ms)
+        rootDispersion: readShort(msg, 8), // server's error bound against its reference (ms)
         offset: ((t2 - t1) + (t3 - t4)) / 2,
         delay: (t4 - t1) - (t3 - t2),
         at: t4,

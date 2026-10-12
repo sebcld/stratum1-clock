@@ -78,17 +78,19 @@
     <section class="card tech" aria-labelledby="techLabel">
       <div class="card-label" id="techLabel">Datos técnicos de la conexión NTP</div>
       <div class="current-server">
-        <span class="badge">Servidor actual</span>
+        <span class="badge">Servidor seleccionado</span>
         <span class="mono host" id="curHost">—</span>
         <span class="mono muted" id="curIp"></span>
       </div>
       <dl class="metrics">
-        <div><dt>Offset</dt><dd class="mono" id="mOffset">—</dd><small>servidor ↔ NTP (mediana)</small></div>
+        <div><dt>Offset</dt><dd class="mono" id="mOffset">—</dd><small>servidor ↔ NTP (combinado)</small></div>
+        <div><dt>Margen</dt><dd class="mono" id="mDistance">—</dd><small>error máximo (distancia raíz)</small></div>
         <div><dt>Delay</dt><dd class="mono" id="mDelay">—</dd><small>latencia ida y vuelta</small></div>
         <div><dt>Jitter</dt><dd class="mono" id="mJitter">—</dd><small>variación del offset</small></div>
         <div><dt>Stratum</dt><dd class="mono" id="mStratum">—</dd><small>nivel jerárquico</small></div>
         <div><dt>Ref ID</dt><dd class="mono" id="mRefid">—</dd><small>fuente de referencia</small></div>
         <div><dt>RTT web</dt><dd class="mono" id="mRtt">—</dd><small>navegador ↔ servidor</small></div>
+        <div><dt>Acuerdo</dt><dd class="mono" id="mAgree">—</dd><small>servidores coincidentes</small></div>
       </dl>
     </section>
 
@@ -114,11 +116,13 @@
               <th scope="col" class="num">Offset</th>
               <th scope="col" class="num">Delay</th>
               <th scope="col" class="num">Jitter</th>
+              <th scope="col" class="num">Margen</th>
+              <th scope="col" class="num">Peso</th>
               <th scope="col">Estado</th>
             </tr>
           </thead>
           <tbody id="serverRows">
-            <tr><td colspan="7" class="muted">Esperando primera sincronización…</td></tr>
+            <tr><td colspan="9" class="muted">Esperando primera sincronización…</td></tr>
           </tbody>
         </table>
       </div>
@@ -126,7 +130,10 @@
   </main>
 
   <footer class="footer">
-    Offset = ((T2 − T1) + (T3 − T4)) / 2 · Delay = (T4 − T1) − (T3 − T2). Positivo: El reloj va atrasado.
+    Offset = ((T2 − T1) + (T3 − T4)) / 2 · Delay = (T4 − T1) − (T3 − T2). Positivo: El reloj va atrasado.<br>
+    Selección estilo chrony: cada servidor define el intervalo offset ± margen; el algoritmo de Marzullo descarta
+    a los que no coinciden con la mayoría y se combinan, ponderados por 1/margen, los que tienen un margen
+    de hasta <span id="combineLimit">3</span>× el del mejor.
   </footer>
 
   <dialog class="dialog" id="deviceDialog" aria-labelledby="deviceTitle">
