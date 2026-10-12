@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Reloj NTP Stratum 1</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%2338bdf8' stroke-width='3'/%3E%3Cpath d='M16 8v8l5 3' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13"/><path d="M16 8v8l5 3"/></svg>
+      <span>Reloj <strong>NTP</strong> · Stratum 1</span>
+    </div>
+    <div class="status-pill" id="statusPill" data-state="pending" role="status">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="statusText">Conectando…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Main NTP clock -->
+    <section class="card hero" aria-labelledby="ntpLabel">
+      <div class="card-label" id="ntpLabel">Hora de red · NTP</div>
+      <div class="clock clock-main" aria-live="off">
+        <span id="ntpHms">--:--:--</span><span class="ms">.<span id="ntpMs">---</span></span>
+      </div>
+      <div class="clock-meta">
+        <span id="ntpDate">—</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span id="ntpZone">—</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>UTC <span class="mono" id="ntpUtc">--:--:--</span></span>
+      </div>
+
+      <div class="hero-actions">
+        <button class="sync-btn" id="syncBtn" type="button">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg>
+          <span id="syncBtnText">Sincronización Manual</span>
+        </button>
+        <div class="sync-times">
+          <div>Última sincronización: <span class="mono" id="lastSync">—</span></div>
+          <div>Próxima automática: <span class="mono" id="nextSync">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Local clock -->
+    <section class="card" aria-labelledby="localLabel">
+      <div class="card-label" id="localLabel">Hora local del sistema</div>
+      <div class="clock clock-secondary">
+        <span id="localHms">--:--:--</span><span class="ms">.<span id="localMs">---</span></span>
+      </div>
+      <div class="clock-meta"><span id="localDate">—</span></div>
+      <div class="device-row" id="deviceRow" hidden>
+        <span class="os-chip" id="osChip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span id="osLabel">Detectando sistema…</span>
+        </span>
+        <button class="ghost-btn" id="deviceBtn" type="button">Sincronizar este equipo</button>
+      </div>
+    </section>
+
+    <!-- Offset -->
+    <section class="card offset-card" aria-labelledby="offsetLabel" id="offsetCard" data-level="pending">
+      <div class="card-label" id="offsetLabel">Diferencia local vs NTP</div>
+      <div class="offset-value mono" id="offsetValue">—</div>
+      <div class="offset-desc" id="offsetDesc">Midiendo…</div>
+      <div class="offset-sub">Precisión estimada <span class="mono" id="precision">—</span></div>
+    </section>
+
+    <!-- Technical data -->
+    <section class="card tech" aria-labelledby="techLabel">
+      <div class="card-label" id="techLabel">Datos técnicos de la conexión NTP</div>
+      <div class="current-server">
+        <span class="badge">Servidor actual</span>
+        <span class="mono host" id="curHost">—</span>
+        <span class="mono muted" id="curIp"></span>
+      </div>
+      <dl class="metrics">
+        <div><dt>Offset</dt><dd class="mono" id="mOffset">—</dd><small>servidor ↔ NTP (mediana)</small></div>
+        <div><dt>Delay</dt><dd class="mono" id="mDelay">—</dd><small>latencia ida y vuelta</small></div>
+        <div><dt>Jitter</dt><dd class="mono" id="mJitter">—</dd><small>variación del offset</small></div>
+        <div><dt>Stratum</dt><dd class="mono" id="mStratum">—</dd><small>nivel jerárquico</small></div>
+        <div><dt>Ref ID</dt><dd class="mono" id="mRefid">—</dd><small>fuente de referencia</small></div>
+        <div><dt>RTT web</dt><dd class="mono" id="mRtt">—</dd><small>navegador ↔ servidor</small></div>
+      </dl>
+    </section>
+
+    <!-- Offset history -->
+    <section class="card chart-card" aria-labelledby="chartLabel">
+      <div class="card-label" id="chartLabel">Historial del offset local vs NTP</div>
+      <div class="chart" id="chart" role="img" aria-label="Historial del offset">
+        <div class="chart-empty">Recopilando mediciones…</div>
+      </div>
+      <div class="chart-tip" id="chartTip" hidden></div>
+    </section>
+
+    <!-- Server table -->
+    <section class="card servers" aria-labelledby="serversLabel">
+      <div class="card-label" id="serversLabel">Servidores Stratum 1 consultados</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Servidor</th>
+              <th scope="col">Stratum</th>
+              <th scope="col">Ref</th>
+              <th scope="col" class="num">Offset</th>
+              <th scope="col" class="num">Delay</th>
+              <th scope="col" class="num">Jitter</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="serverRows">
+            <tr><td colspan="7" class="muted">Esperando primera sincronización…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Offset = ((T2 − T1) + (T3 − T4)) / 2 · Delay = (T4 − T1) − (T3 − T2). Positivo: El reloj va atrasado.
+  </footer>
+
+  <dialog class="dialog" id="deviceDialog" aria-labelledby="deviceTitle">
+    <div class="dialog-head">
+      <h2 id="deviceTitle">Sincronizar el reloj de este equipo</h2>
+      <button class="icon-btn" id="deviceClose" type="button" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body" id="deviceBody"></div>
+    <div class="dialog-actions" id="deviceActions"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
