@@ -1,11 +1,19 @@
 # stratum1-clock
 
-Aplicación web que muestra la hora exacta sincronizada con varios servidores NTP Stratum 1 (NIST, PTB, USNO, Netnod, SHOA) más el pool de NTP.br y la compara con el reloj local.
+Aplicación web que muestra la hora exacta sincronizada con varios servidores NTP Stratum 1 (NIST, PTB, USNO, Netnod, SHOA, NTP.br) y la compara con el reloj local.
+
+## Demo en vivo
+
+🔗 **<https://stratum1-clock.onrender.com/>**
+
+
+![Captura de stratum1-clock en vivo](docs/screenshot.png)
+
 
 ## Uso
 
 ```bash
-git clone <url-del-repositorio> stratum1-clock
+git clone https://github.com/sebcld/stratum1-clock.git
 cd stratum1-clock
 npm start          # o: node server.js
 ```
@@ -29,6 +37,8 @@ cp .env.example .env
 | `CLOCK_ADMIN_KEY`   | Valor secreto de ese parámetro                                   |
 
 Si `CLOCK_ADMIN_PARAM` o `CLOCK_ADMIN_KEY` quedan vacíos, la sincronización del reloj del equipo queda desactivada para todos.
+
+
 
 ## Cómo funciona
 
